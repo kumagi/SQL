@@ -75,7 +75,9 @@ class NonTerm
     ret = ""
     ret += "list_" if @rep
     ret += "opt_" if @opt
-    raise "cannot gen comment" if @comment
+    if @comment
+      return "<#{@candidates.join(" ")}>"
+    end
     @candidates.each_with_index{|candidate, j|
       ret += "_or_" if 0 < j
       candidate.each_with_index{|token, i|
@@ -141,21 +143,9 @@ class NonTerm
   def dump_yacc(name)
     inside_rules = {}
 
-    puts "#{name}:"
-    if @opt
-      puts    "         /* Nothing */"
-    end
-    @candidates.each_with_index{|candidate, i|
-      if i == 0 and not @opt
-        print "         "
-      else
-        print "    |    "
-      end
-      if @rep
-        print name + " "
-      end
-      candidate.each_with_index{|token, j|
-        print " " if 0 < j
+    def dump_tokens(tokens, inside_rules)
+      tokens.each_with_index{|token, i|
+        print " " if 0 < i
         if token.class == String
           print token
         elsif token.class == NonTerm
@@ -184,15 +174,45 @@ class NonTerm
           raise "invalid term"
         end
       }
-      puts ""
-    }
-    puts    "         ;"
-    puts    ""
+    end
 
-    inside_rules.each{|name, struct|
-      struct.dump_yacc(name)
-    }
-    nil
+    puts "#{name}:"
+
+    if @rep
+      if 1 < @candidates.size
+        raise "cannot repeat multiple candidates"
+      end
+      print "         "
+      dump_tokens(@candidates[0], inside_rules)
+      puts ""
+      print    "    |     "
+      print "#{name} "
+      dump_tokens(@candidates[0], inside_rules)
+      puts ""
+    else
+      if @opt
+        puts    "         /* Nothing */"
+      end
+      @candidates.each_with_index{|candidate, i|
+        if i == 0 and not @opt
+          print "         "
+        else
+          print "    |    "
+        end
+        if @rep
+          print name + " "
+        end
+        dump_tokens(candidate, inside_rules)
+        puts ""
+      }
+      puts    "         ;"
+      puts    ""
+
+      inside_rules.each{|name, struct|
+        struct.dump_yacc(name)
+      }
+      nil
+    end
   end
 
   def replace(target, term)
@@ -497,8 +517,7 @@ end
 opt = Optimizer.new
 opt.add_optimization(Proc.new{|f| inline_non_opt_or_rep(f) })
 opt.add_optimization(Proc.new{|f| inline_simple_term(f) })
-opt.add_optimization(Proc.new{|f| inline_zeromore(f) })
-#
+# opt.add_optimization(Proc.new{|f| inline_zeromore(f) }) # it may be wrong
 
 rulemap = file2rulemap(ARGV[0])
 rules = rulemap.map{|term, rules|
