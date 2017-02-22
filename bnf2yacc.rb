@@ -51,11 +51,16 @@ class NonTerm
   end
 
   def visit(&blk)
-    yield self
-    @tokens.each{|t|
-      if t.class == NonTerm
-        t.visit(&blk)
-      end
+    @candidates.each{|cand|
+      cand.each{|token|
+        if token.class == String
+          blk.call(token)
+        elsif token.class == NonTerm
+          token.visit(&blk)
+        else
+          raise "unknown node type"
+        end
+      }
     }
   end
 
@@ -532,12 +537,27 @@ rules = rulemap.map{|term, rules|
 
 opt.optimize(rules)
 
-puts "output start"
+terms = []
+tokens = []
+
+rules.each{|term, rule|
+  terms << term
+  rule.visit{|token|
+    tokens << token
+  }
+}
+tokens = tokens.sort.uniq
+terminals = tokens - terms.sort
+
+terminals.each{|terminal|
+  puts "%token #{terminal}"
+}
+
+puts ""
+
 rules.each{|term, struct|
   struct.dump_yacc(term)
 }
-puts "output finish"
-puts "rules #{rules.size}"
 
 #output_yacc(rules)
 #puts $queue
